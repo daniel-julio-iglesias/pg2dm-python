@@ -1,0 +1,583 @@
+===============================
+cd D:\daniel\JupyterProjects\pg2dm
+
+===============================
+
+conda create -n pg2dm python=3.11 jupyterlab notebook ipykernel numpy pandas matplotlib scikit-learn
+conda activate pg2dm
+python -m ipykernel install --user --name pg2dm --display-name "Python (pg2dm)"
+
+
+
+#
+# To activate this environment, use
+#
+#     $ conda activate pg2dm
+#
+# To deactivate an active environment, use
+#
+#     $ conda deactivate
+
+
+jupyter lab
+[jupyter notebook]
+
+===============================
+
+
+For this kind of book-based project I would **not** use any of the existing “big” environments.
+I recommend a **dedicated, minimal environment** named `pg2dm`.
+
+---
+
+## 1. Why not reuse the existing ones?
+
+From your list:
+
+* `base` → shared, system-wide (`C:\ProgramData\anaconda3`), not writable without admin. Best kept stable.
+* `anaconda-2025.04-py3.11`, `anaconda-ml-ai`, `anaconda-finance` → large “kitchen sink” envs, many packages, higher risk of version conflicts and harder to reproduce.
+* `prophet38_jupyter`, `python-starter` → tailored to other purposes.
+
+For a book like *A Programmer’s Guide to Data Mining*, you want:
+
+* Small, predictable set of packages.
+* Easy to recreate on other machines.
+* Isolation from your other ML / finance tooling.
+
+So a **fresh environment** is the cleanest solution.
+
+---
+
+## 2. Recommended environment for `pg2dm`
+
+From Anaconda PowerShell Prompt on your Lenovo:
+
+```powershell
+conda create -n pg2dm python=3.11 `
+    jupyterlab notebook ipykernel `
+    numpy pandas matplotlib scikit-learn
+```
+
+Then:
+
+```powershell
+conda activate pg2dm
+```
+
+(Optional but useful, especially if you use JupyterLab):
+
+```powershell
+python -m ipykernel install --user --name pg2dm --display-name "Python (pg2dm)"
+```
+
+Now:
+
+* Use this env for all work under
+  `D:\daniel\JupyterProjects\pg2dm\` (or your chosen folder).
+* In Jupyter Lab/Notebook select kernel **“Python (pg2dm)”**.
+
+This gives you:
+
+* Exactly what you need for the book (Python, Jupyter, NumPy, Pandas, Matplotlib, scikit-learn for later chapters).
+* No dependency entanglement with `anaconda-ml-ai` or other envs.
+* A configuration you can easily document and recreate (e.g. `conda env export -n pg2dm > pg2dm.yml`).
+
+---
+
+## 3. Short answer
+
+* Do **not** base the project on `base`, `anaconda-ml-ai`, or other existing envs.
+* Create and use a **new dedicated env `pg2dm`** for the `guidetodatamining.com` book.
+  That will keep the project clean, reproducible, and independent from the rest of your tooling.
+
+
+
+===============================
+
+
+You are not missing anything; this is exactly the point where it helps to “lock in” one concrete track and give it code structure.
+
+Let us do the next deterministic step from that other thread:
+
+* Create `ch2/src/ch2_recommender/`
+* Drop in ready-to-use `distances.py` and `recommender.py`
+* Import them from your `ch2_recommender_intro.ipynb` notebook
+
+So Chapter 2 becomes a clean mini-module plus an exercise notebook.
+
+---
+
+## 1. Folder structure recap
+
+Under your existing project:
+
+```text
+C:\Users\212792494\JupyterProjects\pg2dm-python\ch2\
+```
+
+Create:
+
+```text
+ch2/
+  data/
+    readmech2_utf8.txt            # already discussed
+  notebooks/
+    ch2_recommender_intro.ipynb   # your Jupyter notebook
+  src/
+    ch2_recommender/
+      __init__.py
+      distances.py
+      recommender.py
+```
+
+You can create folders manually in Explorer or via PowerShell.
+
+---
+
+## 2. `__init__.py`
+
+File: `ch2/src/ch2_recommender/__init__.py`
+
+```python
+"""
+ch2_recommender
+
+Support code for Chapter 2 – Recommendation Systems
+from "A Programmer's Guide to Data Mining".
+"""
+
+from .distances import (
+    RatingDict,
+    shared_items,
+    manhattan_distance,
+    euclidean_distance,
+    minkowski_distance,
+    pearson_correlation,
+    manhattan_similarity,
+    pearson_similarity,
+)
+
+from .recommender import (
+    neighbours,
+    recommend_user_based,
+)
+```
+
+---
+
+## 3. `distances.py`
+
+File: `ch2/src/ch2_recommender/distances.py`
+
+```python
+"""
+Distance and similarity functions for user–item rating data.
+
+Designed to support Chapter 2 exercises from
+"A Programmer's Guide to Data Mining".
+"""
+
+import math
+from typing import Dict, Iterable
+
+
+# ratings[user][item] = numeric rating (e.g. 1–5)
+RatingDict = Dict[str, Dict[str, float]]
+
+
+def shared_items(ratings: RatingDict, u1: str, u2: str) -> Iterable[str]:
+    """
+    Return the set of items rated by both u1 and u2.
+
+    If one of the users does not exist in the ratings dictionary,
+    a KeyError will be raised (by design, so we notice inconsistent input).
+    """
+    return set(ratings[u1].keys()).intersection(ratings[u2].keys())
+
+
+def manhattan_distance(ratings: RatingDict, u1: str, u2: str) -> float:
+    """
+    Manhattan (L1) distance between two users over shared items.
+
+    If users have no items in common, returns math.inf.
+    """
+    common = shared_items(ratings, u1, u2)
+    if not common:
+        return math.inf
+    return sum(abs(ratings[u1][i] - ratings[u2][i]) for i in common)
+
+
+def euclidean_distance(ratings: RatingDict, u1: str, u2: str) -> float:
+    """
+    Euclidean (L2) distance between two users over shared items.
+
+    If users have no items in common, returns math.inf.
+    """
+    common = shared_items(ratings, u1, u2)
+    if not common:
+        return math.inf
+    return math.sqrt(sum((ratings[u1][i] - ratings[u2][i]) ** 2 for i in common))
+
+
+def minkowski_distance(
+    ratings: RatingDict,
+    u1: str,
+    u2: str,
+    p: float = 2.0,
+) -> float:
+    """
+    General Minkowski distance between two users over shared items.
+
+    p must be > 0. p=1 gives Manhattan, p=2 gives Euclidean.
+
+    If users have no items in common, returns math.inf.
+    """
+    if p <= 0:
+        raise ValueError("p must be > 0")
+
+    common = shared_items(ratings, u1, u2)
+    if not common:
+        return math.inf
+
+    return sum(abs(ratings[u1][i] - ratings[u2][i]) ** p for i in common) ** (1.0 / p)
+
+
+def pearson_correlation(ratings: RatingDict, u1: str, u2: str) -> float:
+    """
+    Pearson correlation coefficient between two users.
+
+    Returns a value in [-1, 1]. If users have no items in common
+    or variance is zero, returns 0.0.
+    """
+    common = list(shared_items(ratings, u1, u2))
+    n = len(common)
+    if n == 0:
+        return 0.0
+
+    sum1 = sum(ratings[u1][i] for i in common)
+    sum2 = sum(ratings[u2][i] for i in common)
+
+    sum1_sq = sum(ratings[u1][i] ** 2 for i in common)
+    sum2_sq = sum(ratings[u2][i] ** 2 for i in common)
+
+    product_sum = sum(ratings[u1][i] * ratings[u2][i] for i in common)
+
+    # numerator
+    num = product_sum - (sum1 * sum2 / n)
+
+    # denominator
+    den = math.sqrt(
+        (sum1_sq - (sum1 ** 2) / n) * (sum2_sq - (sum2 ** 2) / n)
+    )
+
+    if den == 0:
+        return 0.0
+
+    return num / den
+
+
+def manhattan_similarity(ratings: RatingDict, u1: str, u2: str) -> float:
+    """
+    Convert Manhattan distance into a similarity score in (0, 1].
+
+    Larger similarity means closer users. If there are no shared items,
+    returns 0.0.
+    """
+    d = manhattan_distance(ratings, u1, u2)
+    if d == math.inf:
+        return 0.0
+    return 1.0 / (1.0 + d)
+
+
+def pearson_similarity(ratings: RatingDict, u1: str, u2: str) -> float:
+    """
+    Pearson-based similarity in [0, 1].
+
+    Pearson correlation is in [-1, 1]. Negative correlations are
+    mapped to 0.0, positive correlations remain unchanged.
+    """
+    corr = pearson_correlation(ratings, u1, u2)
+    return max(0.0, corr)
+```
+
+---
+
+## 4. `recommender.py`
+
+File: `ch2/src/ch2_recommender/recommender.py`
+
+```python
+"""
+User-based k-NN recommender functions.
+
+Designed to support Chapter 2 exercises from
+"A Programmer's Guide to Data Mining".
+"""
+
+import math
+from typing import Callable, Dict, Iterable, List, Tuple
+
+from .distances import RatingDict
+
+
+SimilarityFunc = Callable[[RatingDict, str, str], float]
+
+
+def neighbours(
+    ratings: RatingDict,
+    target_user: str,
+    similarity_fn: SimilarityFunc,
+    top_n: int = 3,
+) -> List[Tuple[float, str]]:
+    """
+    Return top_n neighbours (similarity, user) for target_user.
+
+    Neighbours are sorted in descending order of similarity.
+    """
+    if target_user not in ratings:
+        raise KeyError(f"Unknown user: {target_user}")
+
+    scores: List[Tuple[float, str]] = []
+
+    for other in ratings:
+        if other == target_user:
+            continue
+        sim = similarity_fn(ratings, target_user, other)
+        scores.append((sim, other))
+
+    scores.sort(reverse=True, key=lambda x: x[0])
+    return scores[:top_n]
+
+
+def recommend_user_based(
+    ratings: RatingDict,
+    target_user: str,
+    similarity_fn: SimilarityFunc,
+    k: int = 3,
+    min_sim: float = 0.0,
+) -> List[Tuple[float, str]]:
+    """
+    Recommend items to target_user based on k nearest neighbours.
+
+    Algorithm (standard user-based collaborative filtering):
+
+    1. Find k nearest neighbours of target_user using similarity_fn.
+    2. Consider items not yet rated by target_user.
+    3. For each candidate item, compute a weighted average of neighbours'
+       ratings, where weights are similarity scores.
+    4. Return a list of (predicted_rating, item), sorted by predicted_rating
+       in descending order.
+
+    Items for which the sum of similarities is zero are ignored.
+    """
+    if target_user not in ratings:
+        raise KeyError(f"Unknown user: {target_user}")
+
+    # 1. Get k neighbours
+    neighs = neighbours(ratings, target_user, similarity_fn, top_n=k)
+
+    # 2. Collect candidate items (not yet rated by target_user)
+    target_items = set(ratings[target_user].keys())
+    all_items = {i for r in ratings.values() for i in r.keys()}
+    candidate_items = all_items - target_items
+
+    weighted_scores: Dict[str, float] = {}
+    sim_sums: Dict[str, float] = {}
+
+    for sim, other in neighs:
+        if sim <= min_sim:
+            continue
+        for item, rating in ratings[other].items():
+            if item in target_items:
+                continue
+            weighted_scores.setdefault(item, 0.0)
+            sim_sums.setdefault(item, 0.0)
+            weighted_scores[item] += sim * rating
+            sim_sums[item] += sim
+
+    predictions: List[Tuple[float, str]] = []
+    for item in candidate_items:
+        if item not in weighted_scores:
+            continue
+        if sim_sums.get(item, 0.0) == 0.0:
+            continue
+        predicted = weighted_scores[item] / sim_sums[item]
+        predictions.append((predicted, item))
+
+    predictions.sort(reverse=True, key=lambda x: x[0])
+    return predictions
+
+
+def distance_matrix(
+    ratings: RatingDict,
+    distance_fn: Callable[[RatingDict, str, str], float],
+    users: Iterable[str] | None = None,
+) -> None:
+    """
+    Utility function for Chapter 2 experiments.
+
+    Print a distance matrix for the given users (or all users
+    if users is None), using the supplied distance function.
+    """
+
+    if users is None:
+        user_list = list(ratings.keys())
+    else:
+        user_list = list(users)
+
+    # Header
+    header = "       " + "  ".join(f"{u:>7}" for u in user_list)
+    print("Distance matrix:")
+    print(header)
+
+    for u1 in user_list:
+        row = [f"{u1:>7}"]
+        for u2 in user_list:
+            if u1 == u2:
+                row.append("   0.00")
+            else:
+                d = distance_fn(ratings, u1, u2)
+                if d == math.inf:
+                    row.append("    inf")
+                else:
+                    row.append(f"{d:7.2f}")
+        print("  ".join(row))
+```
+
+---
+
+## 5. How to use these modules in the notebook
+
+In your `ch2/notebooks/ch2_recommender_intro.ipynb`, at the top (after the “Introduction and objectives” cell), add:
+
+```python
+from pathlib import Path
+import sys
+
+BASE_DIR = Path(r"C:\Users\212792494\JupyterProjects\pg2dm-python\ch2")
+SRC_DIR = BASE_DIR / "src"
+
+# Allow importing ch2_recommender package
+if str(SRC_DIR) not in sys.path:
+    sys.path.append(str(SRC_DIR))
+
+from ch2_recommender.distances import (
+    RatingDict,
+    manhattan_distance,
+    euclidean_distance,
+    minkowski_distance,
+    pearson_correlation,
+    manhattan_similarity,
+    pearson_similarity,
+)
+from ch2_recommender.recommender import (
+    neighbours,
+    recommend_user_based,
+    distance_matrix,
+)
+```
+
+Then define your small `ratings` dictionary in the notebook:
+
+```python
+ratings: RatingDict = {
+    "Alice": {"Band A": 5, "Band B": 3, "Band C": 4},
+    "Bob":   {"Band A": 3, "Band B": 4, "Band D": 2},
+    "Carol": {"Band B": 2, "Band C": 5, "Band D": 5},
+    "Dave":  {"Band A": 4, "Band C": 3, "Band D": 4},
+}
+```
+
+Example usage cells:
+
+```python
+# Distance matrix with Manhattan distance
+distance_matrix(ratings, manhattan_distance)
+```
+
+```python
+# Neighbours of Alice using Manhattan-based similarity
+for sim, u in neighbours(ratings, "Alice", manhattan_similarity, top_n=3):
+    print(u, sim)
+```
+
+```python
+# Recommendations for Alice using Pearson similarity
+recs = recommend_user_based(ratings, "Alice", pearson_similarity, k=3)
+for score, item in recs:
+    print(f"{item}: predicted rating {score:.2f}")
+```
+
+---
+
+## 6. Minimal next steps (to keep you out of overwhelm)
+
+For now, ignore all other projects and just do this small checklist:
+
+1. Create the `src/ch2_recommender/` folder and three files above.
+2. Ensure the notebook can import them and run the simple tests.
+3. Once it works, adapt the `ratings` dictionary to the exact example from Zacharski’s Chapter 2.
+4. Only after that, consider any extension (CSV data, more users, etc.).
+
+This way Chapter 2 becomes one contained “unit”: clear entry, clear exit, and a reusable code asset you can build on for the rest of the book.
+
+
+
+===============================
+
+
+
+
+
+===============================
+
+
+
+
+===============================
+
+
+
+
+===============================
+
+
+
+
+===============================
+
+
+
+
+===============================
+
+
+
+
+===============================
+
+
+
+
+===============================
+
+
+
+===============================
+
+
+
+
+===============================
+
+
+
+
+===============================
+
+
+
+===============================
+
+
+
